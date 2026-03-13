@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 60" width="180" height="34">
+  <defs>
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&amp;display=swap');
+    </style>
+  </defs>
+  <!-- Logo text -->
+  <text
+    x="0"
+    y="36"
+    font-family="'Playfair Display', 'Georgia', 'Times New Roman', serif"
+    font-weight="700"
+    font-size="34"
+    letter-spacing="3"
+    fill="white"
+  >BOOTLEGGER</text>
+  <!-- Gold dot -->
+  <circle cx="310" cy="26" r="5" fill="#c9a84c"/>
+  <!-- Gold underline -->
+  <rect x="0" y="48" width="270" height="2.5" rx="1.25" fill="#c9a84c"/>
+</svg>
