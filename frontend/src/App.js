@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import '@/App.css';
+import { AuthProvider, useAuth } from '@/context/AuthContext';
+import LoginPage from '@/pages/LoginPage';
 import Dashboard from '@/pages/Dashboard';
 import Callouts from '@/pages/Callouts';
 import Equipment from '@/pages/Equipment';
 import SelfHelp from '@/pages/SelfHelp';
 import History from '@/pages/History';
 import Users from '@/pages/Users';
+import LoginHistory from '@/pages/LoginHistory';
 import { APP_CONFIG } from '@/data';
-import { LayoutDashboard, Wrench, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu } from 'lucide-react';
+import { LayoutDashboard, Wrench, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -35,7 +38,9 @@ function BootleggerLogo() {
   );
 }
 
-function Header({ userInitial }) {
+function Header({ user, onLogout, onShowMenu, showMenu, onNavigate }) {
+  const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U';
+  
   return (
     <header className="header" data-testid="app-header">
       <div className="header-logo">
@@ -44,11 +49,44 @@ function Header({ userInitial }) {
           <span className="text-[9px] font-semibold tracking-[3px] text-brand-gold uppercase mt-0.5 pl-0.5">ASSET TRACKER</span>
         </div>
       </div>
-      <div className="header-actions">
-        <div className="avatar-btn" data-testid="user-avatar">{userInitial}</div>
-        <button className="menu-btn" aria-label="Menu" data-testid="menu-btn">
+      <div className="header-actions relative">
+        <div 
+          className="avatar-btn cursor-pointer" 
+          data-testid="user-avatar"
+          onClick={onShowMenu}
+          title={user?.name}
+        >
+          {userInitial}
+        </div>
+        <button className="menu-btn" aria-label="Menu" data-testid="menu-btn" onClick={onShowMenu}>
           <Menu size={22} className="text-text-secondary" />
         </button>
+        
+        {/* Dropdown Menu */}
+        {showMenu && (
+          <div className="absolute top-full right-0 mt-2 w-56 bg-bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden" data-testid="user-menu">
+            <div className="p-3 border-b border-border">
+              <div className="font-semibold text-sm text-text-primary">{user?.name}</div>
+              <div className="text-xs text-text-muted truncate">{user?.email}</div>
+            </div>
+            <button
+              onClick={() => { onNavigate('loginHistory'); onShowMenu(); }}
+              className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left"
+              data-testid="login-history-btn"
+            >
+              <Clock size={18} className="text-accent-blue" />
+              <span className="text-sm text-text-secondary">Login History</span>
+            </button>
+            <button
+              onClick={onLogout}
+              className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left border-t border-border"
+              data-testid="logout-btn"
+            >
+              <LogOut size={18} className="text-accent-red" />
+              <span className="text-sm text-text-secondary">Sign Out</span>
+            </button>
+          </div>
+        )}
       </div>
     </header>
   );
@@ -75,8 +113,25 @@ function BottomNav({ active, onNav }) {
   );
 }
 
-export default function App() {
+function AuthenticatedApp() {
+  const { user, logout, loading } = useAuth();
   const [page, setPage] = useState('dashboard');
+  const [showMenu, setShowMenu] = useState(false);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-bg-primary flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-accent-orange border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-text-muted">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginPage />;
+  }
 
   const renderPage = () => {
     switch (page) {
@@ -86,15 +141,37 @@ export default function App() {
       case 'selfhelp': return <SelfHelp />;
       case 'history': return <History />;
       case 'users': return <Users />;
+      case 'loginHistory': return <LoginHistory onBack={() => setPage('dashboard')} />;
       default: return <Dashboard onNavigate={setPage} />;
     }
   };
 
+  // Close menu when clicking outside
+  const handleContainerClick = (e) => {
+    if (showMenu && !e.target.closest('[data-testid="user-menu"]') && !e.target.closest('[data-testid="menu-btn"]') && !e.target.closest('[data-testid="user-avatar"]')) {
+      setShowMenu(false);
+    }
+  };
+
   return (
-    <div className="app-container" data-testid="app-container">
-      <Header userInitial={APP_CONFIG.userInitial} />
+    <div className="app-container" data-testid="app-container" onClick={handleContainerClick}>
+      <Header 
+        user={user} 
+        onLogout={logout}
+        showMenu={showMenu}
+        onShowMenu={() => setShowMenu(!showMenu)}
+        onNavigate={setPage}
+      />
       {renderPage()}
-      <BottomNav active={page} onNav={setPage} />
+      {page !== 'loginHistory' && <BottomNav active={page} onNav={setPage} />}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AuthenticatedApp />
+    </AuthProvider>
   );
 }
