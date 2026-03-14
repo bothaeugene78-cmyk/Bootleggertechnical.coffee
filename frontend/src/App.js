@@ -3,7 +3,7 @@ import '@/App.css';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import LoginPage from '@/pages/LoginPage';
 import Dashboard from '@/pages/Dashboard';
-import Callouts from '@/pages/Callouts';
+import Tickets from '@/pages/Tickets';
 import Equipment from '@/pages/Equipment';
 import SelfHelp from '@/pages/SelfHelp';
 import History from '@/pages/History';
@@ -11,15 +11,14 @@ import Users from '@/pages/Users';
 import LoginHistory from '@/pages/LoginHistory';
 import ResetCodes from '@/pages/ResetCodes';
 import { APP_CONFIG } from '@/data';
-import { LayoutDashboard, Wrench, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound } from 'lucide-react';
+import { LayoutDashboard, Ticket, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound, Settings } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { id: 'callouts', label: 'Callouts', icon: Wrench },
+  { id: 'tickets', label: 'Tickets', icon: Ticket },
   { id: 'equipment', label: 'Equipment', icon: Coffee },
   { id: 'selfhelp', label: 'Self-Help', icon: Lightbulb },
   { id: 'history', label: 'History', icon: ClipboardList },
-  { id: 'users', label: 'Users', icon: UsersIcon },
 ];
 
 function BootleggerLogo() {
@@ -39,7 +38,30 @@ function BootleggerLogo() {
   );
 }
 
+function RoleBadge({ role }) {
+  const roleColors = {
+    admin: 'bg-red-500/20 text-red-400',
+    technician: 'bg-blue-500/20 text-blue-400',
+    accounting: 'bg-green-500/20 text-green-400',
+    store_staff: 'bg-orange-500/20 text-orange-400'
+  };
+  
+  const roleLabels = {
+    admin: 'Admin',
+    technician: 'Technician',
+    accounting: 'Accounting',
+    store_staff: 'Store Staff'
+  };
+
+  return (
+    <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${roleColors[role] || roleColors.store_staff}`}>
+      {roleLabels[role] || 'Staff'}
+    </span>
+  );
+}
+
 function Header({ user, onLogout, onShowMenu, showMenu, onNavigate }) {
+  const { isAdmin } = useAuth();
   const userInitial = user?.name?.charAt(0)?.toUpperCase() || 'U';
   
   return (
@@ -47,7 +69,7 @@ function Header({ user, onLogout, onShowMenu, showMenu, onNavigate }) {
       <div className="header-logo">
         <div className="flex flex-col gap-0">
           <BootleggerLogo />
-          <span className="text-[9px] font-semibold tracking-[3px] text-brand-gold uppercase mt-0.5 pl-0.5">ASSET TRACKER</span>
+          <span className="text-[9px] font-semibold tracking-[3px] text-brand-gold uppercase mt-0.5 pl-0.5">SERVICE MANAGEMENT</span>
         </div>
       </div>
       <div className="header-actions relative">
@@ -65,27 +87,48 @@ function Header({ user, onLogout, onShowMenu, showMenu, onNavigate }) {
         
         {/* Dropdown Menu */}
         {showMenu && (
-          <div className="absolute top-full right-0 mt-2 w-56 bg-bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden" data-testid="user-menu">
+          <div className="absolute top-full right-0 mt-2 w-64 bg-bg-card border border-border rounded-xl shadow-xl z-50 overflow-hidden" data-testid="user-menu">
             <div className="p-3 border-b border-border">
-              <div className="font-semibold text-sm text-text-primary">{user?.name}</div>
+              <div className="flex items-center justify-between">
+                <div className="font-semibold text-sm text-text-primary">{user?.name}</div>
+                <RoleBadge role={user?.role} />
+              </div>
               <div className="text-xs text-text-muted truncate">{user?.email}</div>
+              {user?.store_name && (
+                <div className="text-xs text-accent-orange mt-1">{user.store_name}</div>
+              )}
             </div>
+            
             <button
-              onClick={() => { onNavigate('loginHistory'); onShowMenu(); }}
+              onClick={() => { onNavigate('users'); onShowMenu(); }}
               className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left"
-              data-testid="login-history-btn"
+              data-testid="users-btn"
             >
-              <Clock size={18} className="text-accent-blue" />
-              <span className="text-sm text-text-secondary">Login History</span>
+              <UsersIcon size={18} className="text-text-muted" />
+              <span className="text-sm text-text-secondary">Team Members</span>
             </button>
-            <button
-              onClick={() => { onNavigate('resetCodes'); onShowMenu(); }}
-              className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left"
-              data-testid="reset-codes-btn"
-            >
-              <KeyRound size={18} className="text-accent-orange" />
-              <span className="text-sm text-text-secondary">Password Resets</span>
-            </button>
+            
+            {isAdmin && (
+              <>
+                <button
+                  onClick={() => { onNavigate('loginHistory'); onShowMenu(); }}
+                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left"
+                  data-testid="login-history-btn"
+                >
+                  <Clock size={18} className="text-accent-blue" />
+                  <span className="text-sm text-text-secondary">Login History</span>
+                </button>
+                <button
+                  onClick={() => { onNavigate('resetCodes'); onShowMenu(); }}
+                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left"
+                  data-testid="reset-codes-btn"
+                >
+                  <KeyRound size={18} className="text-accent-orange" />
+                  <span className="text-sm text-text-secondary">Password Resets</span>
+                </button>
+              </>
+            )}
+            
             <button
               onClick={onLogout}
               className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left border-t border-border"
@@ -123,7 +166,7 @@ function BottomNav({ active, onNav }) {
 }
 
 function AuthenticatedApp() {
-  const { user, logout, loading } = useAuth();
+  const { user, logout, loading, isAdmin } = useAuth();
   const [page, setPage] = useState('dashboard');
   const [showMenu, setShowMenu] = useState(false);
 
@@ -145,11 +188,11 @@ function AuthenticatedApp() {
   const renderPage = () => {
     switch (page) {
       case 'dashboard': return <Dashboard onNavigate={setPage} />;
-      case 'callouts': return <Callouts />;
+      case 'tickets': return <Tickets />;
       case 'equipment': return <Equipment />;
       case 'selfhelp': return <SelfHelp />;
       case 'history': return <History />;
-      case 'users': return <Users />;
+      case 'users': return <Users onBack={() => setPage('dashboard')} />;
       case 'loginHistory': return <LoginHistory onBack={() => setPage('dashboard')} />;
       case 'resetCodes': return <ResetCodes onBack={() => setPage('dashboard')} />;
       default: return <Dashboard onNavigate={setPage} />;
@@ -163,6 +206,8 @@ function AuthenticatedApp() {
     }
   };
 
+  const showBottomNav = !['loginHistory', 'resetCodes', 'users'].includes(page);
+
   return (
     <div className="app-container" data-testid="app-container" onClick={handleContainerClick}>
       <Header 
@@ -173,7 +218,7 @@ function AuthenticatedApp() {
         onNavigate={setPage}
       />
       {renderPage()}
-      {(page !== 'loginHistory' && page !== 'resetCodes') && <BottomNav active={page} onNav={setPage} />}
+      {showBottomNav && <BottomNav active={page} onNav={setPage} />}
     </div>
   );
 }

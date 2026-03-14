@@ -53,10 +53,16 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
-  const register = useCallback(async (name, email, password) => {
+  const register = useCallback(async (name, email, password, role = 'store_staff', store_name = null) => {
     setError(null);
     try {
-      const response = await axios.post(`${API}/auth/register`, { name, email, password });
+      const response = await axios.post(`${API}/auth/register`, { 
+        name, 
+        email, 
+        password,
+        role,
+        store_name
+      });
       const { token, user: userData } = response.data;
       
       localStorage.setItem('bootlegger_token', token);
@@ -82,6 +88,18 @@ export function AuthProvider({ children }) {
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 
+  const updateUser = useCallback((updates) => {
+    const updatedUser = { ...user, ...updates };
+    localStorage.setItem('bootlegger_user', JSON.stringify(updatedUser));
+    setUser(updatedUser);
+  }, [user]);
+
+  // Role checks
+  const isAdmin = user?.role === 'admin';
+  const isTechnician = user?.role === 'technician';
+  const isAccounting = user?.role === 'accounting';
+  const isStoreStaff = user?.role === 'store_staff';
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -91,7 +109,12 @@ export function AuthProvider({ children }) {
       register, 
       logout,
       getAuthHeader,
-      isAuthenticated: !!user 
+      updateUser,
+      isAuthenticated: !!user,
+      isAdmin,
+      isTechnician,
+      isAccounting,
+      isStoreStaff
     }}>
       {children}
     </AuthContext.Provider>
