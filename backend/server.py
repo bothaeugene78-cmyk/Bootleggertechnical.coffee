@@ -88,7 +88,7 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
-    role: str
+    role: str = "store_staff"
     store_name: Optional[str] = None
     created_at: str
     last_login: Optional[str] = None
