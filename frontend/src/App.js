@@ -9,8 +9,9 @@ import SelfHelp from '@/pages/SelfHelp';
 import History from '@/pages/History';
 import Users from '@/pages/Users';
 import LoginHistory from '@/pages/LoginHistory';
+import ResetCodes from '@/pages/ResetCodes';
 import { APP_CONFIG } from '@/data';
-import { LayoutDashboard, Wrench, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock } from 'lucide-react';
+import { LayoutDashboard, Wrench, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound } from 'lucide-react';
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -78,6 +79,14 @@ function Header({ user, onLogout, onShowMenu, showMenu, onNavigate }) {
               <span className="text-sm text-text-secondary">Login History</span>
             </button>
             <button
+              onClick={() => { onNavigate('resetCodes'); onShowMenu(); }}
+              className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left"
+              data-testid="reset-codes-btn"
+            >
+              <KeyRound size={18} className="text-accent-orange" />
+              <span className="text-sm text-text-secondary">Password Resets</span>
+            </button>
+            <button
               onClick={onLogout}
               className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left border-t border-border"
               data-testid="logout-btn"
@@ -142,6 +151,7 @@ function AuthenticatedApp() {
       case 'history': return <History />;
       case 'users': return <Users />;
       case 'loginHistory': return <LoginHistory onBack={() => setPage('dashboard')} />;
+      case 'resetCodes': return <ResetCodes onBack={() => setPage('dashboard')} />;
       default: return <Dashboard onNavigate={setPage} />;
     }
   };
@@ -163,7 +173,7 @@ function AuthenticatedApp() {
         onNavigate={setPage}
       />
       {renderPage()}
-      {page !== 'loginHistory' && <BottomNav active={page} onNav={setPage} />}
+      {(page !== 'loginHistory' && page !== 'resetCodes') && <BottomNav active={page} onNav={setPage} />}
     </div>
   );
 }

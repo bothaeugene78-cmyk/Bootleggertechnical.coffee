@@ -88,12 +88,42 @@ class StatusCheck(BaseModel):
 class StatusCheckCreate(BaseModel):
     client_name: str
 
+# Password Reset Models
+class GenerateResetCodeRequest(BaseModel):
+    email: EmailStr
+
+class ResetCodeResponse(BaseModel):
+    email: str
+    reset_code: str
+    expires_at: str
+    message: str
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr
+    reset_code: str
+    new_password: str
+
+class ResetCodeListResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    email: str
+    reset_code: str
+    created_at: str
+    expires_at: str
+    used: bool
+
 # ─── HELPER FUNCTIONS ───────────────────────────────────────
 
 def validate_email_domain(email: str) -> bool:
     """Check if email domain is in allowed list"""
     domain = email.split('@')[-1].lower()
     return domain in ALLOWED_DOMAINS
+
+def generate_reset_code() -> str:
+    """Generate a 6-character alphanumeric reset code"""
+    import random
+    import string
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -240,6 +270,96 @@ async def get_me(current_user: dict = Depends(get_current_user)):
 @api_router.get("/auth/verify")
 async def verify_token(current_user: dict = Depends(get_current_user)):
     return {"valid": True, "user_id": current_user["id"]}
+
+# ─── PASSWORD RESET ROUTES ──────────────────────────────────
+
+@api_router.post("/auth/generate-reset-code", response_model=ResetCodeResponse)
+async def generate_password_reset_code(
+    request: GenerateResetCodeRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Admin generates a reset code for a user"""
+    # Check if user exists
+    user = await db.users.find_one({"email": request.email.lower()})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Generate reset code
+    reset_code = generate_reset_code()
+    now = datetime.now(timezone.utc)
+    expires_at = now + timedelta(hours=1)  # Code valid for 1 hour
+    
+    # Invalidate any existing reset codes for this user
+    await db.reset_codes.update_many(
+        {"email": request.email.lower(), "used": False},
+        {"$set": {"used": True}}
+    )
+    
+    # Store reset code
+    reset_doc = {
+        "id": str(uuid.uuid4()),
+        "email": request.email.lower(),
+        "reset_code": reset_code,
+        "created_at": now.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "used": False
+    }
+    await db.reset_codes.insert_one(reset_doc)
+    
+    return ResetCodeResponse(
+        email=request.email.lower(),
+        reset_code=reset_code,
+        expires_at=expires_at.isoformat(),
+        message=f"Reset code generated. Give this code to the user: {reset_code}"
+    )
+
+@api_router.post("/auth/reset-password")
+async def reset_password(request: PasswordResetRequest):
+    """User resets password using reset code"""
+    # Find valid reset code
+    reset_doc = await db.reset_codes.find_one({
+        "email": request.email.lower(),
+        "reset_code": request.reset_code.upper(),
+        "used": False
+    })
+    
+    if not reset_doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset code")
+    
+    # Check if code expired
+    expires_at = datetime.fromisoformat(reset_doc["expires_at"])
+    if datetime.now(timezone.utc) > expires_at:
+        await db.reset_codes.update_one(
+            {"id": reset_doc["id"]},
+            {"$set": {"used": True}}
+        )
+        raise HTTPException(status_code=400, detail="Reset code has expired")
+    
+    # Validate new password
+    if len(request.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Update user password
+    await db.users.update_one(
+        {"email": request.email.lower()},
+        {"$set": {"password_hash": hash_password(request.new_password)}}
+    )
+    
+    # Mark reset code as used
+    await db.reset_codes.update_one(
+        {"id": reset_doc["id"]},
+        {"$set": {"used": True}}
+    )
+    
+    return {"message": "Password reset successful. You can now login with your new password."}
+
+@api_router.get("/admin/reset-codes", response_model=List[ResetCodeListResponse])
+async def get_reset_codes(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all reset codes (for admin view)"""
+    codes = await db.reset_codes.find({}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    return codes
 
 # ─── ADMIN ROUTES (Login History) ───────────────────────────
 

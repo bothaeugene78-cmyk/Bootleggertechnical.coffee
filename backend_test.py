@@ -8,6 +8,7 @@ class BootleggerAPITester:
         self.base_url = base_url
         self.token = None
         self.test_user_id = None
+        self.reset_code = None  # Store generated reset code
         self.tests_run = 0
         self.tests_passed = 0
         self.failed_tests = []
@@ -220,6 +221,131 @@ class BootleggerAPITester:
         )
         return success
 
+    def test_generate_reset_code(self):
+        """Test generating password reset code (admin function)"""
+        if not self.token:
+            print("❌ No token available for reset code generation")
+            return False
+            
+        success, response = self.run_test(
+            "Generate Password Reset Code",
+            "POST",
+            "/auth/generate-reset-code",
+            200,
+            data={"email": "john@bootlegger.co.za"},
+            auth_required=True
+        )
+        if success:
+            required_fields = ["email", "reset_code", "expires_at", "message"]
+            has_fields = all(field in response for field in required_fields)
+            if has_fields:
+                self.reset_code = response.get("reset_code")
+                print(f"📝 Generated reset code: {self.reset_code}")
+                return True
+        return False
+
+    def test_reset_codes_list(self):
+        """Test getting reset codes list"""
+        if not self.token:
+            print("❌ No token available for reset codes list")
+            return False
+            
+        success, response = self.run_test(
+            "Get Reset Codes List",
+            "GET",
+            "/admin/reset-codes",
+            200,
+            auth_required=True
+        )
+        if success and isinstance(response, list):
+            print(f"📝 Found {len(response)} reset codes")
+            return True
+        return False
+
+    def test_password_reset_invalid_code(self):
+        """Test password reset with invalid code"""
+        success, response = self.run_test(
+            "Password Reset - Invalid Code",
+            "POST",
+            "/auth/reset-password",
+            400,
+            data={
+                "email": "john@bootlegger.co.za",
+                "reset_code": "INVALID",
+                "new_password": "newpass123"
+            }
+        )
+        if success:
+            detail = response.get("detail", "")
+            return "Invalid or expired reset code" in detail
+        return False
+
+    def test_password_reset_valid_code(self):
+        """Test password reset with valid code"""
+        if not hasattr(self, 'reset_code') or not self.reset_code:
+            print("❌ No valid reset code available")
+            return False
+            
+        success, response = self.run_test(
+            "Password Reset - Valid Code",
+            "POST",
+            "/auth/reset-password",
+            200,
+            data={
+                "email": "john@bootlegger.co.za", 
+                "reset_code": self.reset_code,
+                "new_password": "newpassword123"
+            }
+        )
+        if success:
+            message = response.get("message", "")
+            return "Password reset successful" in message
+        return False
+
+    def test_login_with_new_password(self):
+        """Test login with newly reset password"""
+        success, response = self.run_test(
+            "Login with New Password",
+            "POST",
+            "/auth/login",
+            200,
+            data={
+                "email": "john@bootlegger.co.za",
+                "password": "newpassword123"
+            }
+        )
+        if success:
+            self.token = response.get("token")  # Update token for future tests
+            return "token" in response
+        return False
+
+    def test_admin_users_list(self):
+        """Test admin users list endpoint"""
+        if not self.token:
+            print("❌ No token available for users list")
+            return False
+            
+        success, response = self.run_test(
+            "Get Admin Users List",
+            "GET",
+            "/admin/users",
+            200,
+            auth_required=True
+        )
+        if success and isinstance(response, list):
+            if len(response) > 0:
+                user = response[0]
+                required_fields = ["id", "email", "name", "created_at"]
+                has_fields = all(field in user for field in required_fields)
+                # Ensure password_hash is not exposed
+                no_password = "password_hash" not in user
+                print(f"📝 Found {len(response)} users, password protected: {no_password}")
+                return has_fields and no_password
+            else:
+                print("📝 No users found but endpoint works")
+                return True
+        return False
+
 def main():
     print("🚀 Starting Bootlegger Asset Tracker API Tests")
     print("=" * 60)
@@ -236,6 +362,12 @@ def main():
         ("JWT Verification", tester.test_auth_verification),
         ("Get User Info", tester.test_get_current_user),
         ("Login History", tester.test_login_history),
+        ("Admin Users List", tester.test_admin_users_list),
+        ("Generate Reset Code", tester.test_generate_reset_code),
+        ("Reset Codes List", tester.test_reset_codes_list),
+        ("Password Reset Invalid", tester.test_password_reset_invalid_code),
+        ("Password Reset Valid", tester.test_password_reset_valid_code),
+        ("Login New Password", tester.test_login_with_new_password),
         ("Unauthorized Access", tester.test_unauthorized_access),
     ]
 
