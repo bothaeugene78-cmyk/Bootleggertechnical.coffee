@@ -21,8 +21,15 @@ Client needs a streamlined workflow system:
 - **File Storage**: Cloudinary (videos, job card photos, invoices)
 - **Email**: Resend (verified domain: bootleggertechnical.coffee)
 - **Target Domain**: bootleggertechnical.coffee
+- **PWA**: Installable on Android & iOS
 
-## User Roles
+## User Roles & Auto-Assignment
+
+| Email Domain | Auto Role |
+|---|---|
+| `gm@rockandroller.coffee` | Admin |
+| `@rockandroller.*` | Technician |
+| `@bootlegger.*` | Store Staff |
 
 | Role | Permissions |
 |------|-------------|
@@ -65,7 +72,7 @@ Client needs a streamlined workflow system:
 ## API Endpoints
 
 ### Authentication
-- `POST /api/auth/register` - Register with company email
+- `POST /api/auth/register` - Register with company email (auto-role assignment)
 - `POST /api/auth/login` - Login
 - `POST /api/auth/generate-reset-code` - Admin generates reset code
 - `POST /api/auth/reset-password` - Reset with code
@@ -76,8 +83,8 @@ Client needs a streamlined workflow system:
 - `GET /api/tickets/{id}` - Get ticket details
 - `PUT /api/tickets/{id}` - Update ticket (status, assignment, schedule)
 - `PUT /api/tickets/{id}/video` - Add video
-- `POST /api/tickets/{id}/jobcard` - Upload job card (JSON body: job_card_url, job_card_public_id, completion_notes)
-- `POST /api/tickets/{id}/invoice` - Attach invoice (JSON body: invoice_url, invoice_number)
+- `POST /api/tickets/{id}/jobcard` - Upload job card (JSON body)
+- `POST /api/tickets/{id}/invoice` - Attach invoice (JSON body)
 
 ### Cloudinary
 - `GET /api/cloudinary/signature` - Signed upload params (supports image, video, raw)
@@ -112,7 +119,7 @@ Client needs a streamlined workflow system:
 
 ### Completed
 - [x] User authentication with 6 allowed email domains
-- [x] Auto role assignment (Bootlegger → store_staff, Rock & Roller → technician, gm@rockandroller.coffee → admin)
+- [x] Auto role assignment (Bootlegger -> store_staff, Rock & Roller -> technician, gm@rockandroller.coffee -> admin)
 - [x] Role-based access control (4 roles)
 - [x] Service ticket creation with auto-numbering
 - [x] Video upload via Cloudinary
@@ -126,12 +133,13 @@ Client needs a streamlined workflow system:
 - [x] Job card photo upload (technician role) via Cloudinary
 - [x] Invoice attachment (accounting role) via Cloudinary
 - [x] Role-based authorization on upload endpoints
-- [x] PWA support — installable on Android & iOS as native app
+- [x] PWA support - installable on Android & iOS as native app
+- [x] Actual Bootlegger logo integrated (transparent PNG)
 - [x] 513 historical service records imported (in data.js)
 
 ### Pending
-- [ ] Full end-to-end workflow test by user
-- [ ] Deployment to bootleggertechnical.coffee
+- [ ] User end-to-end workflow testing with real data
+- [ ] Deployment to bootleggertechnical.coffee (user to redeploy)
 
 ## Prioritized Backlog
 
@@ -149,5 +157,7 @@ Client needs a streamlined workflow system:
 - Primary Gold: #c9a84c
 - Background: #0f1117
 - Accent Orange: #f59c0a
+- Logo Text: #E0DED9 (off-white serif)
+- Logo Accent: #A48A55 (gold line)
 - Font Display: Rajdhani
 - Font Body: Inter
