@@ -40,10 +40,41 @@ const STATUS_STYLES = {
   expired: 'bg-gray-500/20 text-gray-400'
 };
 
+const PLAN_FEATURES = {
+  silver: [
+    '2x scheduled services per year',
+    'Telephonic support (Mon–Fri 8am–5pm)',
+    '48-hour response on callouts',
+    'On-site visit if not resolved telephonically',
+    '10% discount on parts',
+  ],
+  gold: [
+    '4x scheduled services per year (quarterly)',
+    'Telephonic + WhatsApp support (Mon–Sat)',
+    '24-hour response on callouts',
+    '1x emergency callout per quarter included',
+    'On-site visit if not resolved telephonically',
+    '15% discount on parts',
+    'Water filtration check included',
+  ],
+  platinum: [
+    '6x scheduled services per year (bi-monthly)',
+    'Priority support 7 days (incl. public holidays)',
+    'Same-day response on callouts',
+    '2x emergency callouts per quarter included',
+    'On-site visit if not resolved telephonically',
+    '20% discount on parts',
+    'Water filtration check + replacement included',
+    'Annual deep clean (full strip-down)',
+    'Grinder burr assessment included',
+  ],
+};
+
 function PlanCard({ plan, onSubscribe, loading, currentPlan }) {
   const style = PLAN_STYLES[plan.id] || PLAN_STYLES.silver;
   const Icon = style.icon;
   const isCurrent = currentPlan === plan.id;
+  const features = PLAN_FEATURES[plan.id] || [];
   
   return (
     <div className={`rounded-xl border-2 ${style.border} ${style.bg} p-5 relative`} data-testid={`plan-${plan.id}`}>
@@ -60,9 +91,12 @@ function PlanCard({ plan, onSubscribe, loading, currentPlan }) {
         <span className="font-display text-3xl font-bold text-text-primary">{plan.price_display}</span>
       </div>
       <div className="text-xs text-text-muted mb-4 space-y-1.5">
-        <div className="flex items-center gap-2"><Check size={14} className={style.accent} /> Monthly SLA coverage</div>
-        <div className="flex items-center gap-2"><Check size={14} className={style.accent} /> Priority service response</div>
-        <div className="flex items-center gap-2"><Check size={14} className={style.accent} /> Dedicated support</div>
+        {features.map((f, i) => (
+          <div key={i} className="flex items-start gap-2">
+            <Check size={14} className={`${style.accent} flex-shrink-0 mt-0.5`} />
+            <span>{f}</span>
+          </div>
+        ))}
       </div>
       {isCurrent ? (
         <div className="w-full py-2.5 rounded-lg bg-green-500/20 text-green-400 text-center text-sm font-semibold flex items-center justify-center gap-2">
