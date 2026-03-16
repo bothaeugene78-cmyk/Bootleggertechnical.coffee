@@ -120,7 +120,7 @@ Client needs a streamlined workflow system:
 
 ## Test Credentials
 - Admin: john@bootlegger.co.za / newpassword123
-- Preview: https://claude-employee-hub.preview.emergentagent.com
+- Preview: https://bootleg-service-test.preview.emergentagent.com
 
 ## Implementation Status
 

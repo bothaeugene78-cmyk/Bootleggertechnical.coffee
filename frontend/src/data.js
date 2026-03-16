@@ -425,6 +425,12 @@ export const ASSETS = [
   { id: "A061", name: "N1 City Kiosk",              group: "WC Franchised", type: "Kiosk",       lastService: null, nextService: null, status: "ok", daysOverdue: 0 },
   { id: "A062", name: "Hermanus Kiosk",             group: "WC Franchised", type: "Kiosk",       lastService: null, nextService: null, status: "ok", daysOverdue: 0 },
   { id: "A063", name: "Paarl Mall",                 group: "WC Franchised", type: "Full Store", lastService: null, nextService: null, status: "ok", daysOverdue: 0 },
+
+  // ── ADDITIONAL STORES (from Transaction Report) ────────
+  { id: "A064", name: "Camps Bay", group: "WC Franchised", type: "Full Store", lastService: null, nextService: null, status: "ok", daysOverdue: 0 },
+  { id: "A065", name: "Sea Point Trailer", group: "WC Franchised", type: "Mobile Unit", lastService: null, nextService: null, status: "ok", daysOverdue: 0 },
+  { id: "A066", name: "The Depot", group: "WC BHO", type: "Full Store", lastService: null, nextService: null, status: "ok", daysOverdue: 0 },
+  { id: "A067", name: "Wholesale", group: "Wholesale", type: "Wholesale", lastService: null, nextService: null, status: "ok", daysOverdue: 0 },
 ];
 
 // ── ACTIVE CALLOUTS ────────────────────────────────────────
