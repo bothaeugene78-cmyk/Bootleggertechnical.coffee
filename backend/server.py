@@ -156,13 +156,11 @@ class TicketResponse(BaseModel):
     updated_at: str
 
 class JobCardUpload(BaseModel):
-    ticket_id: str
     job_card_url: str
     job_card_public_id: str
     completion_notes: Optional[str] = None
 
 class InvoiceUpload(BaseModel):
-    ticket_id: str
     invoice_url: str
     invoice_number: str
 
@@ -572,7 +570,7 @@ async def get_reset_codes(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/cloudinary/signature")
 async def get_cloudinary_signature(
-    resource_type: str = Query("image", enum=["image", "video"]),
+    resource_type: str = Query("image", enum=["image", "video", "raw"]),
     folder: str = "tickets",
     current_user: dict = Depends(get_current_user)
 ):
@@ -767,12 +765,13 @@ async def update_ticket(
 @api_router.post("/tickets/{ticket_id}/jobcard")
 async def upload_job_card(
     ticket_id: str,
-    job_card_url: str,
-    job_card_public_id: str,
-    completion_notes: Optional[str] = None,
+    data: JobCardUpload,
     current_user: dict = Depends(get_current_user)
 ):
     """Technician uploads completed job card"""
+    if current_user.get("role") not in ["admin", "technician"]:
+        raise HTTPException(status_code=403, detail="Only technicians can upload job cards")
+    
     ticket = await db.tickets.find_one({"id": ticket_id})
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
@@ -781,10 +780,10 @@ async def upload_job_card(
     await db.tickets.update_one(
         {"id": ticket_id},
         {"$set": {
-            "job_card_url": job_card_url,
-            "job_card_public_id": job_card_public_id,
+            "job_card_url": data.job_card_url,
+            "job_card_public_id": data.job_card_public_id,
             "status": "completed",
-            "notes": completion_notes if completion_notes else ticket.get("notes"),
+            "notes": data.completion_notes if data.completion_notes else ticket.get("notes"),
             "updated_at": now
         }}
     )
@@ -794,8 +793,7 @@ async def upload_job_card(
 @api_router.post("/tickets/{ticket_id}/invoice")
 async def attach_invoice(
     ticket_id: str,
-    invoice_url: str,
-    invoice_number: str,
+    data: InvoiceUpload,
     current_user: dict = Depends(get_current_user)
 ):
     """Accounting attaches invoice to ticket"""
@@ -810,8 +808,8 @@ async def attach_invoice(
     await db.tickets.update_one(
         {"id": ticket_id},
         {"$set": {
-            "invoice_url": invoice_url,
-            "invoice_number": invoice_number,
+            "invoice_url": data.invoice_url,
+            "invoice_number": data.invoice_number,
             "status": "invoiced",
             "updated_at": now
         }}

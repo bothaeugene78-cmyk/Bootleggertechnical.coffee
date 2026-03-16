@@ -3,7 +3,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ASSETS } from '@/data';
 import { 
   Plus, Search, X, Video, Upload, Clock, Wrench, CheckCircle, 
-  FileText, AlertCircle, Loader2, Play, Camera, User, Calendar
+  FileText, AlertCircle, Loader2, Play, Camera, User, Calendar, Image
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -82,6 +82,220 @@ function VideoUploader({ onUpload, uploading }) {
     </div>
   );
 }
+
+// Job Card Upload Component (for technicians)
+function JobCardUploader({ ticket, onUploaded, getAuthHeader }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [notes, setNotes] = useState('');
+  const [error, setError] = useState('');
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    if (!file.type.startsWith('image/')) {
+      setError('Please select an image file (photo of signed job card)');
+      return;
+    }
+    
+    if (file.size > 20 * 1024 * 1024) {
+      setError('Image must be under 20MB');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+
+    try {
+      const sigResponse = await axios.get(
+        `${API}/cloudinary/signature?resource_type=image&folder=jobcards/${ticket.ticket_number}`,
+        { headers: getAuthHeader() }
+      );
+      const sig = sigResponse.data;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', sig.api_key);
+      formData.append('timestamp', sig.timestamp);
+      formData.append('signature', sig.signature);
+      formData.append('folder', sig.folder);
+
+      const uploadRes = await axios.post(
+        `https://api.cloudinary.com/v1_1/${sig.cloud_name}/image/upload`,
+        formData
+      );
+
+      await axios.post(
+        `${API}/tickets/${ticket.id}/jobcard`,
+        {
+          job_card_url: uploadRes.data.secure_url,
+          job_card_public_id: uploadRes.data.public_id,
+          completion_notes: notes || null
+        },
+        { headers: getAuthHeader() }
+      );
+
+      onUploaded();
+    } catch (err) {
+      console.error('Job card upload failed:', err);
+      setError(err.response?.data?.detail || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="bg-bg-card rounded-lg p-4" data-testid="jobcard-uploader">
+      <div className="text-xs text-text-muted uppercase mb-2 flex items-center gap-1.5">
+        <Camera size={14} /> Upload Job Card
+      </div>
+      {error && (
+        <div className="text-xs text-red-400 mb-2">{error}</div>
+      )}
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Completion notes (optional)..."
+        rows={2}
+        className="w-full bg-bg-primary border border-border rounded-lg py-2 px-3 text-text-primary text-sm resize-none mb-3"
+        data-testid="jobcard-notes"
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={handleFileSelect}
+        className="hidden"
+        data-testid="jobcard-file-input"
+      />
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        className="w-full py-3 border-2 border-dashed border-green-500/50 rounded-lg flex items-center justify-center gap-2 text-green-400 hover:bg-green-500/5 transition-colors disabled:opacity-50 text-sm font-medium"
+        data-testid="jobcard-upload-btn"
+      >
+        {uploading ? (
+          <><Loader2 size={18} className="animate-spin" /> Uploading...</>
+        ) : (
+          <><Image size={18} /> Take Photo or Select Job Card</>
+        )}
+      </button>
+    </div>
+  );
+}
+
+// Invoice Upload Component (for accounting)
+function InvoiceUploader({ ticket, onUploaded, getAuthHeader }) {
+  const fileInputRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [error, setError] = useState('');
+
+  const handleFileSelect = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!invoiceNumber.trim()) {
+      setError('Please enter an invoice number first');
+      return;
+    }
+
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.type)) {
+      setError('Please select a PDF or image file');
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      setError('File must be under 20MB');
+      return;
+    }
+
+    setUploading(true);
+    setError('');
+
+    const isPdf = file.type === 'application/pdf';
+    const resourceType = isPdf ? 'raw' : 'image';
+
+    try {
+      const sigResponse = await axios.get(
+        `${API}/cloudinary/signature?resource_type=${resourceType}&folder=invoices/${ticket.ticket_number}`,
+        { headers: getAuthHeader() }
+      );
+      const sig = sigResponse.data;
+
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', sig.api_key);
+      formData.append('timestamp', sig.timestamp);
+      formData.append('signature', sig.signature);
+      formData.append('folder', sig.folder);
+
+      const uploadRes = await axios.post(
+        `https://api.cloudinary.com/v1_1/${sig.cloud_name}/${resourceType}/upload`,
+        formData
+      );
+
+      await axios.post(
+        `${API}/tickets/${ticket.id}/invoice`,
+        {
+          invoice_url: uploadRes.data.secure_url,
+          invoice_number: invoiceNumber.trim()
+        },
+        { headers: getAuthHeader() }
+      );
+
+      onUploaded();
+    } catch (err) {
+      console.error('Invoice upload failed:', err);
+      setError(err.response?.data?.detail || 'Upload failed. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div className="bg-bg-card rounded-lg p-4" data-testid="invoice-uploader">
+      <div className="text-xs text-text-muted uppercase mb-2 flex items-center gap-1.5">
+        <FileText size={14} /> Attach Invoice
+      </div>
+      {error && (
+        <div className="text-xs text-red-400 mb-2">{error}</div>
+      )}
+      <input
+        type="text"
+        value={invoiceNumber}
+        onChange={(e) => setInvoiceNumber(e.target.value)}
+        placeholder="Invoice number (e.g., INV-2026-001)"
+        className="w-full bg-bg-primary border border-border rounded-lg py-2 px-3 text-text-primary text-sm mb-3"
+        data-testid="invoice-number-input"
+      />
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,image/*"
+        onChange={handleFileSelect}
+        className="hidden"
+        data-testid="invoice-file-input"
+      />
+      <button
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploading}
+        className="w-full py-3 border-2 border-dashed border-blue-500/50 rounded-lg flex items-center justify-center gap-2 text-blue-400 hover:bg-blue-500/5 transition-colors disabled:opacity-50 text-sm font-medium"
+        data-testid="invoice-upload-btn"
+      >
+        {uploading ? (
+          <><Loader2 size={18} className="animate-spin" /> Uploading...</>
+        ) : (
+          <><Upload size={18} /> Upload Invoice (PDF or Image)</>
+        )}
+      </button>
+    </div>
+  );
+}
+
 
 // New Ticket Modal
 function NewTicketModal({ onClose, onCreated }) {
@@ -532,23 +746,30 @@ function TicketDetailModal({ ticket, onClose, onUpdated }) {
             </>
           )}
 
-          {/* Job Card */}
-          {ticket.job_card_url && (
+          {/* Job Card - Upload or View */}
+          {ticket.job_card_url ? (
             <div className="bg-bg-card rounded-lg p-4">
               <div className="text-xs text-text-muted uppercase mb-2">Job Card</div>
               <a 
                 href={ticket.job_card_url} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-accent-green text-sm"
+                className="flex items-center gap-2 text-green-400 text-sm"
+                data-testid="view-jobcard-link"
               >
-                <FileText size={16} /> View Job Card
+                <CheckCircle size={16} /> View Signed Job Card
               </a>
             </div>
-          )}
+          ) : (isTechnician || isAdmin) && ['scheduled', 'in_progress'].includes(ticket.status) ? (
+            <JobCardUploader
+              ticket={ticket}
+              onUploaded={() => { onUpdated(); onClose(); }}
+              getAuthHeader={getAuthHeader}
+            />
+          ) : null}
 
-          {/* Invoice */}
-          {ticket.invoice_url && (
+          {/* Invoice - Upload or View */}
+          {ticket.invoice_url ? (
             <div className="bg-bg-card rounded-lg p-4">
               <div className="text-xs text-text-muted uppercase mb-2">Invoice</div>
               <div className="text-sm text-text-primary mb-1">#{ticket.invoice_number}</div>
@@ -556,12 +777,19 @@ function TicketDetailModal({ ticket, onClose, onUpdated }) {
                 href={ticket.invoice_url} 
                 target="_blank" 
                 rel="noopener noreferrer"
-                className="flex items-center gap-2 text-accent-blue text-sm"
+                className="flex items-center gap-2 text-blue-400 text-sm"
+                data-testid="view-invoice-link"
               >
                 <FileText size={16} /> View Invoice
               </a>
             </div>
-          )}
+          ) : (isAccounting || isAdmin) && ticket.status === 'completed' ? (
+            <InvoiceUploader
+              ticket={ticket}
+              onUploaded={() => { onUpdated(); onClose(); }}
+              getAuthHeader={getAuthHeader}
+            />
+          ) : null}
 
           {/* Meta */}
           <div className="text-xs text-text-muted pt-2 border-t border-border">
