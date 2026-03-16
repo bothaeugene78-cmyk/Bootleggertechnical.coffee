@@ -221,6 +221,19 @@ def validate_email_domain(email: str) -> bool:
     domain = email.split('@')[-1].lower()
     return domain in ALLOWED_DOMAINS
 
+ROCKANDROLLER_DOMAINS = ["rockandroller.coffee", "rockandroller.co.za", "rockandroller.com"]
+BOOTLEGGER_DOMAINS = ["bootlegger.co.za", "bootlegger.com", "bootlegger.coffee"]
+
+def get_role_from_email(email: str) -> str:
+    """Auto-assign role based on email"""
+    email_lower = email.lower()
+    if email_lower == "gm@rockandroller.coffee":
+        return "admin"
+    domain = email_lower.split('@')[-1]
+    if domain in ROCKANDROLLER_DOMAINS:
+        return "technician"
+    return "store_staff"
+
 def generate_reset_code() -> str:
     """Generate a 6-character alphanumeric reset code"""
     import random
@@ -373,9 +386,8 @@ async def register(user_data: UserCreate):
     if len(user_data.password) < 6:
         raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
     
-    # Validate role
-    if user_data.role not in USER_ROLES:
-        raise HTTPException(status_code=400, detail=f"Invalid role. Must be one of: {USER_ROLES}")
+    # Auto-assign role based on email domain
+    assigned_role = get_role_from_email(user_data.email)
     
     # Create user
     now = datetime.now(timezone.utc).isoformat()
@@ -383,7 +395,7 @@ async def register(user_data: UserCreate):
         "id": str(uuid.uuid4()),
         "email": user_data.email.lower(),
         "name": user_data.name,
-        "role": user_data.role,
+        "role": assigned_role,
         "store_name": user_data.store_name,
         "password_hash": hash_password(user_data.password),
         "created_at": now,
