@@ -136,8 +136,13 @@ Client needs a streamlined workflow system:
 - [x] PWA support - installable on Android & iOS as native app
 - [x] Actual Bootlegger logo integrated (transparent PNG)
 - [x] 513 historical service records imported (in data.js)
+- [x] SLA Subscription system - 3 tiers (Silver R1000, Gold R1250, Platinum R1500)
+- [x] Stripe payment integration for SLA subscriptions
+- [x] Admin manual SLA assignment
+- [x] SLA management page with plan cards and subscription list
 
 ### Pending
+- [ ] User to provide detailed SLA tier coverage details (what each tier includes)
 - [ ] User end-to-end workflow testing with real data
 - [ ] Deployment to bootleggertechnical.coffee (user to redeploy)
 
