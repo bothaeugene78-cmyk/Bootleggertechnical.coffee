@@ -16,18 +16,12 @@ const ALLOWED_DOMAINS = [
 
 function BootleggerLogo() {
   return (
-    <svg viewBox="0 0 320 58" className="h-10 w-auto" xmlns="http://www.w3.org/2000/svg">
-      <text
-        x="0" y="36"
-        fontFamily="'Playfair Display', Georgia, 'Times New Roman', serif"
-        fontWeight="700"
-        fontSize="33"
-        letterSpacing="2"
-        fill="white"
-      >BOOTLEGGER</text>
-      <circle cx="308" cy="24" r="5" fill="#c9a84c"/>
-      <rect x="0" y="48" width="265" height="2.5" rx="1.25" fill="#c9a84c"/>
-    </svg>
+    <img 
+      src="/bootlegger-logo.jpg" 
+      alt="Bootlegger" 
+      className="h-10 w-auto"
+      data-testid="bootlegger-logo"
+    />
   );
 }
 
