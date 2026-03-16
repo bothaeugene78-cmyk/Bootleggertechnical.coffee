@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -51,6 +51,16 @@ RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'notifications@rockandroller.coffee')
 NOTIFICATION_EMAILS = os.environ.get('NOTIFICATION_EMAILS', '').split(',')
 NOTIFICATION_EMAILS = [e.strip() for e in NOTIFICATION_EMAILS if e.strip()]
+
+# Stripe Configuration
+STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY')
+
+# SLA Plans (server-side only - never accept amounts from frontend)
+SLA_PLANS = {
+    "silver": {"name": "Silver", "price": 1000.00, "currency": "zar"},
+    "gold": {"name": "Gold", "price": 1250.00, "currency": "zar"},
+    "platinum": {"name": "Platinum", "price": 1500.00, "currency": "zar"},
+}
 
 # Allowed email domains
 ALLOWED_DOMAINS = [
@@ -213,6 +223,35 @@ class StatusCheck(BaseModel):
 
 class StatusCheckCreate(BaseModel):
     client_name: str
+
+# SLA Subscription Models
+class SLASubscribeRequest(BaseModel):
+    store_name: str
+    plan_id: str  # silver, gold, platinum
+    origin_url: str
+
+class SLAManualAssign(BaseModel):
+    store_name: str
+    plan_id: str
+    notes: Optional[str] = None
+
+class SLASubscriptionResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    store_name: str
+    plan_id: str
+    plan_name: str
+    price: float
+    currency: str
+    status: str  # active, pending, cancelled, expired
+    payment_method: str  # stripe, manual
+    current_period_start: Optional[str] = None
+    current_period_end: Optional[str] = None
+    created_by_id: str
+    created_by_name: str
+    notes: Optional[str] = None
+    created_at: str
+    updated_at: str
 
 # ─── HELPER FUNCTIONS ───────────────────────────────────────
 
@@ -930,6 +969,265 @@ async def get_stats(current_user: dict = Depends(get_current_user)):
         "completed": completed,
         "invoiced": invoiced
     }
+
+# ─── SLA SUBSCRIPTION ROUTES ─────────────────────────────────
+
+@api_router.get("/sla/plans")
+async def get_sla_plans():
+    """Get available SLA plans"""
+    plans = []
+    for plan_id, plan in SLA_PLANS.items():
+        plans.append({
+            "id": plan_id,
+            "name": plan["name"],
+            "price": plan["price"],
+            "currency": plan["currency"],
+            "price_display": f"R{plan['price']:,.0f}/month"
+        })
+    return plans
+
+@api_router.post("/sla/subscribe")
+async def sla_subscribe(
+    data: SLASubscribeRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Store subscribes to an SLA plan via Stripe"""
+    if data.plan_id not in SLA_PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
+    
+    plan = SLA_PLANS[data.plan_id]
+    
+    success_url = f"{data.origin_url}/sla?session_id={{CHECKOUT_SESSION_ID}}"
+    cancel_url = f"{data.origin_url}/sla"
+    webhook_url = f"{data.origin_url}/api/webhook/stripe"
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
+    
+    checkout_request = CheckoutSessionRequest(
+        amount=plan["price"],
+        currency=plan["currency"],
+        success_url=success_url,
+        cancel_url=cancel_url,
+        metadata={
+            "plan_id": data.plan_id,
+            "store_name": data.store_name,
+            "user_id": current_user["id"],
+            "user_email": current_user["email"]
+        }
+    )
+    
+    session = await stripe_checkout.create_checkout_session(checkout_request)
+    
+    # Create payment transaction record
+    now = datetime.now(timezone.utc).isoformat()
+    tx_doc = {
+        "id": str(uuid.uuid4()),
+        "session_id": session.session_id,
+        "plan_id": data.plan_id,
+        "plan_name": plan["name"],
+        "amount": plan["price"],
+        "currency": plan["currency"],
+        "store_name": data.store_name,
+        "user_id": current_user["id"],
+        "user_email": current_user["email"],
+        "payment_status": "pending",
+        "status": "initiated",
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.payment_transactions.insert_one(tx_doc)
+    
+    return {"url": session.url, "session_id": session.session_id}
+
+@api_router.get("/sla/checkout/status/{session_id}")
+async def sla_checkout_status(
+    session_id: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Check Stripe checkout session status and activate subscription"""
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
+    checkout_status = await stripe_checkout.get_checkout_status(session_id)
+    
+    # Update payment transaction
+    tx = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+    if tx:
+        now = datetime.now(timezone.utc).isoformat()
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {"$set": {
+                "payment_status": checkout_status.payment_status,
+                "status": checkout_status.status,
+                "updated_at": now
+            }}
+        )
+        
+        # If paid and no active subscription yet, create one
+        if checkout_status.payment_status == "paid":
+            existing = await db.sla_subscriptions.find_one({
+                "session_id": session_id
+            })
+            if not existing:
+                period_start = now
+                period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+                plan = SLA_PLANS.get(tx["plan_id"], {})
+                
+                sub_doc = {
+                    "id": str(uuid.uuid4()),
+                    "session_id": session_id,
+                    "store_name": tx["store_name"],
+                    "plan_id": tx["plan_id"],
+                    "plan_name": tx.get("plan_name", plan.get("name", "")),
+                    "price": tx["amount"],
+                    "currency": tx["currency"],
+                    "status": "active",
+                    "payment_method": "stripe",
+                    "current_period_start": period_start,
+                    "current_period_end": period_end,
+                    "created_by_id": tx["user_id"],
+                    "created_by_name": tx.get("user_email", ""),
+                    "notes": None,
+                    "created_at": now,
+                    "updated_at": now
+                }
+                await db.sla_subscriptions.insert_one(sub_doc)
+    
+    return {
+        "status": checkout_status.status,
+        "payment_status": checkout_status.payment_status,
+        "amount_total": checkout_status.amount_total,
+        "currency": checkout_status.currency
+    }
+
+@api_router.post("/sla/manual-assign")
+async def sla_manual_assign(
+    data: SLAManualAssign,
+    current_user: dict = Depends(get_current_user)
+):
+    """Admin manually assigns SLA to a store"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can assign SLA plans")
+    
+    if data.plan_id not in SLA_PLANS:
+        raise HTTPException(status_code=400, detail="Invalid plan")
+    
+    plan = SLA_PLANS[data.plan_id]
+    now = datetime.now(timezone.utc).isoformat()
+    period_end = (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()
+    
+    sub_doc = {
+        "id": str(uuid.uuid4()),
+        "session_id": None,
+        "store_name": data.store_name,
+        "plan_id": data.plan_id,
+        "plan_name": plan["name"],
+        "price": plan["price"],
+        "currency": plan["currency"],
+        "status": "active",
+        "payment_method": "manual",
+        "current_period_start": now,
+        "current_period_end": period_end,
+        "created_by_id": current_user["id"],
+        "created_by_name": current_user["name"],
+        "notes": data.notes,
+        "created_at": now,
+        "updated_at": now
+    }
+    await db.sla_subscriptions.insert_one(sub_doc)
+    
+    return {k: v for k, v in sub_doc.items() if k != "_id"}
+
+@api_router.get("/sla/subscriptions", response_model=List[SLASubscriptionResponse])
+async def get_sla_subscriptions(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all SLA subscriptions (admin) or own store's subscription"""
+    if current_user.get("role") == "admin":
+        subs = await db.sla_subscriptions.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    else:
+        store = current_user.get("store_name", "")
+        subs = await db.sla_subscriptions.find(
+            {"store_name": store}, {"_id": 0}
+        ).sort("created_at", -1).to_list(50)
+    return subs
+
+@api_router.put("/sla/subscriptions/{sub_id}")
+async def update_sla_subscription(
+    sub_id: str,
+    status: str = Query(..., enum=["active", "cancelled", "expired"]),
+    current_user: dict = Depends(get_current_user)
+):
+    """Admin updates subscription status"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can update subscriptions")
+    
+    sub = await db.sla_subscriptions.find_one({"id": sub_id})
+    if not sub:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    await db.sla_subscriptions.update_one(
+        {"id": sub_id},
+        {"$set": {"status": status, "updated_at": now}}
+    )
+    
+    updated = await db.sla_subscriptions.find_one({"id": sub_id}, {"_id": 0})
+    return updated
+
+@api_router.get("/sla/payments")
+async def get_sla_payments(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get payment history (admin sees all)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    payments = await db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return payments
+
+# Stripe Webhook
+@app.post("/api/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events"""
+    if not STRIPE_API_KEY:
+        raise HTTPException(status_code=503, detail="Stripe not configured")
+    
+    from emergentintegrations.payments.stripe.checkout import StripeCheckout
+    
+    body = await request.body()
+    sig = request.headers.get("Stripe-Signature")
+    
+    stripe_checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
+    
+    try:
+        webhook_response = await stripe_checkout.handle_webhook(body, sig)
+        
+        if webhook_response.payment_status == "paid":
+            session_id = webhook_response.session_id
+            now = datetime.now(timezone.utc).isoformat()
+            
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {"$set": {
+                    "payment_status": "paid",
+                    "status": "complete",
+                    "updated_at": now
+                }}
+            )
+        
+        return {"status": "ok"}
+    except Exception as e:
+        logging.error(f"Webhook error: {str(e)}")
+        return {"status": "error"}
 
 # ─── EXISTING ROUTES ────────────────────────────────────────
 

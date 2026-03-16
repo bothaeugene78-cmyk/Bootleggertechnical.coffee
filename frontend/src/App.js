@@ -10,8 +10,9 @@ import History from '@/pages/History';
 import Users from '@/pages/Users';
 import LoginHistory from '@/pages/LoginHistory';
 import ResetCodes from '@/pages/ResetCodes';
+import SLA from '@/pages/SLA';
 import { APP_CONFIG } from '@/data';
-import { LayoutDashboard, Ticket, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound, Download, X } from 'lucide-react';
+import { LayoutDashboard, Ticket, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound, Download, X, Shield } from 'lucide-react';
 
 // PWA Install Prompt
 function InstallBanner() {
@@ -85,8 +86,8 @@ function InstallBanner() {
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'tickets', label: 'Tickets', icon: Ticket },
+  { id: 'sla', label: 'SLA', icon: Shield },
   { id: 'equipment', label: 'Equipment', icon: Coffee },
-  { id: 'selfhelp', label: 'Self-Help', icon: Lightbulb },
   { id: 'history', label: 'History', icon: ClipboardList },
 ];
 
@@ -252,6 +253,7 @@ function AuthenticatedApp() {
     switch (page) {
       case 'dashboard': return <Dashboard onNavigate={setPage} />;
       case 'tickets': return <Tickets />;
+      case 'sla': return <SLA onBack={() => setPage('dashboard')} />;
       case 'equipment': return <Equipment />;
       case 'selfhelp': return <SelfHelp />;
       case 'history': return <History />;
