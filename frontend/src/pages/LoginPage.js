@@ -17,7 +17,7 @@ const ALLOWED_DOMAINS = [
 function BootleggerLogo() {
   return (
     <img 
-      src="/bootlegger-logo.jpg" 
+      src="/bootlegger-logo.png" 
       alt="Bootlegger" 
       className="h-10 w-auto"
       data-testid="bootlegger-logo"
