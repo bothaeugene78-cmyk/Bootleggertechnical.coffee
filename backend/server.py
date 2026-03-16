@@ -49,7 +49,8 @@ if os.environ.get('CLOUDINARY_CLOUD_NAME'):
 # Resend Configuration
 RESEND_API_KEY = os.environ.get('RESEND_API_KEY')
 SENDER_EMAIL = os.environ.get('SENDER_EMAIL', 'notifications@rockandroller.coffee')
-NOTIFICATION_EMAIL = os.environ.get('NOTIFICATION_EMAIL', 'service@rockandroller.coffee')
+NOTIFICATION_EMAILS = os.environ.get('NOTIFICATION_EMAILS', '').split(',')
+NOTIFICATION_EMAILS = [e.strip() for e in NOTIFICATION_EMAILS if e.strip()]
 
 # Allowed email domains
 ALLOWED_DOMAINS = [
@@ -266,10 +267,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="User not found")
     return user
 
-async def send_notification_email(to_email: str, subject: str, html_content: str):
-    """Send email notification using Resend"""
+async def send_notification_email(to_emails: list, subject: str, html_content: str):
+    """Send email notification using Resend to multiple recipients"""
     if not RESEND_API_KEY:
         logging.warning("RESEND_API_KEY not configured - email not sent")
+        return None
+    
+    if not to_emails:
+        logging.warning("No notification emails configured")
         return None
     
     try:
@@ -278,13 +283,13 @@ async def send_notification_email(to_email: str, subject: str, html_content: str
         
         params = {
             "from": SENDER_EMAIL,
-            "to": [to_email],
+            "to": to_emails,
             "subject": subject,
             "html": html_content
         }
         
         email = await asyncio.to_thread(resend.Emails.send, params)
-        logging.info(f"Email sent to {to_email}: {email.get('id')}")
+        logging.info(f"Email sent to {to_emails}: {email.get('id')}")
         return email
     except Exception as e:
         logging.error(f"Failed to send email: {str(e)}")
@@ -640,10 +645,10 @@ async def create_ticket(
     
     await db.tickets.insert_one(ticket_doc)
     
-    # Send email notification (async, non-blocking)
-    if NOTIFICATION_EMAIL:
+    # Send email notification to all configured recipients
+    if NOTIFICATION_EMAILS:
         asyncio.create_task(send_notification_email(
-            NOTIFICATION_EMAIL,
+            NOTIFICATION_EMAILS,
             f"New Service Call: {ticket_number} - {ticket_data.store_name}",
             create_ticket_notification_html(ticket_doc)
         ))
@@ -674,9 +679,9 @@ async def add_video_to_ticket(
     
     # Send updated notification with video
     ticket["video_url"] = video_url
-    if NOTIFICATION_EMAIL:
+    if NOTIFICATION_EMAILS:
         asyncio.create_task(send_notification_email(
-            NOTIFICATION_EMAIL,
+            NOTIFICATION_EMAILS,
             f"Video Added: {ticket['ticket_number']} - {ticket['store_name']}",
             create_ticket_notification_html(ticket)
         ))
