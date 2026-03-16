@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import '@/App.css';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import LoginPage from '@/pages/LoginPage';
@@ -11,7 +11,76 @@ import Users from '@/pages/Users';
 import LoginHistory from '@/pages/LoginHistory';
 import ResetCodes from '@/pages/ResetCodes';
 import { APP_CONFIG } from '@/data';
-import { LayoutDashboard, Ticket, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound, Settings } from 'lucide-react';
+import { LayoutDashboard, Ticket, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound, Download, X } from 'lucide-react';
+
+// PWA Install Prompt
+function InstallBanner() {
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showBanner, setShowBanner] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+
+  useEffect(() => {
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (isStandalone) return;
+    if (localStorage.getItem('pwa_dismissed')) return;
+
+    const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(ios);
+    if (ios) { setShowBanner(true); return; }
+
+    const handler = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowBanner(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      await deferredPrompt.userChoice;
+      setDeferredPrompt(null);
+    }
+    setShowBanner(false);
+  };
+
+  const handleDismiss = () => {
+    setShowBanner(false);
+    setDismissed(true);
+    localStorage.setItem('pwa_dismissed', '1');
+  };
+
+  if (!showBanner || dismissed) return null;
+
+  return (
+    <div className="fixed top-0 left-0 right-0 z-[300] bg-gradient-to-r from-[#1a1d27] to-[#252830] border-b border-accent-orange/30 px-4 py-3 shadow-lg" data-testid="install-banner">
+      <div className="max-w-[480px] mx-auto flex items-center gap-3">
+        <img src="/icon-48.png" alt="Bootlegger" className="w-10 h-10 rounded-lg" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-bold text-text-primary">Install Bootlegger App</div>
+          <div className="text-xs text-text-muted">
+            {isIOS ? 'Tap Share then "Add to Home Screen"' : 'Quick access from your home screen'}
+          </div>
+        </div>
+        {!isIOS && (
+          <button
+            onClick={handleInstall}
+            className="bg-accent-orange text-black text-xs font-bold px-4 py-2 rounded-lg flex items-center gap-1.5 flex-shrink-0"
+            data-testid="install-btn"
+          >
+            <Download size={14} /> Install
+          </button>
+        )}
+        <button onClick={handleDismiss} className="text-text-muted flex-shrink-0" data-testid="dismiss-install">
+          <X size={18} />
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -226,6 +295,7 @@ function AuthenticatedApp() {
 export default function App() {
   return (
     <AuthProvider>
+      <InstallBanner />
       <AuthenticatedApp />
     </AuthProvider>
   );

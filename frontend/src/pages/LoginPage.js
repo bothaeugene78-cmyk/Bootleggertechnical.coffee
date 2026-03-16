@@ -286,7 +286,7 @@ export default function LoginPage() {
           <div className="flex justify-center mb-2">
             <BootleggerLogo />
           </div>
-          <span className="text-[10px] font-semibold tracking-[3px] text-brand-gold uppercase">ASSET TRACKER</span>
+          <span className="text-[10px] font-semibold tracking-[3px] text-brand-gold uppercase">SERVICE MANAGEMENT</span>
         </div>
 
         {/* Form Card */}

@@ -112,6 +112,7 @@ Client needs a streamlined workflow system:
 
 ### Completed
 - [x] User authentication with 6 allowed email domains
+- [x] Auto role assignment (Bootlegger → store_staff, Rock & Roller → technician, gm@rockandroller.coffee → admin)
 - [x] Role-based access control (4 roles)
 - [x] Service ticket creation with auto-numbering
 - [x] Video upload via Cloudinary
@@ -125,6 +126,7 @@ Client needs a streamlined workflow system:
 - [x] Job card photo upload (technician role) via Cloudinary
 - [x] Invoice attachment (accounting role) via Cloudinary
 - [x] Role-based authorization on upload endpoints
+- [x] PWA support — installable on Android & iOS as native app
 - [x] 513 historical service records imported (in data.js)
 
 ### Pending
