@@ -760,7 +760,7 @@ function TicketDetailModal({ ticket, onClose, onUpdated }) {
                 <CheckCircle size={16} /> View Signed Job Card
               </a>
             </div>
-          ) : (isTechnician || isAdmin) && ['scheduled', 'in_progress'].includes(ticket.status) ? (
+          ) : (isTechnician || isAdmin) && !['invoiced', 'closed'].includes(ticket.status) ? (
             <JobCardUploader
               ticket={ticket}
               onUploaded={() => { onUpdated(); onClose(); }}
@@ -783,7 +783,7 @@ function TicketDetailModal({ ticket, onClose, onUpdated }) {
                 <FileText size={16} /> View Invoice
               </a>
             </div>
-          ) : (isAccounting || isAdmin) && ticket.status === 'completed' ? (
+          ) : (isAccounting || isAdmin) && ['completed', 'in_progress'].includes(ticket.status) ? (
             <InvoiceUploader
               ticket={ticket}
               onUploaded={() => { onUpdated(); onClose(); }}

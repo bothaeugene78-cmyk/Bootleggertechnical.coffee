@@ -827,6 +827,9 @@ async def upload_job_card(
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
     
+    if ticket.get("status") in ["invoiced", "closed"]:
+        raise HTTPException(status_code=400, detail="Cannot upload job card for invoiced/closed tickets")
+    
     now = datetime.now(timezone.utc).isoformat()
     await db.tickets.update_one(
         {"id": ticket_id},
