@@ -57,8 +57,6 @@ STRIPE_API_KEY = os.environ.get('STRIPE_API_KEY')
 
 # SLA Plans (server-side only - never accept amounts from frontend)
 SLA_PLANS = {
-    "silver": {"name": "Silver", "price": 1000.00, "currency": "zar"},
-    "gold": {"name": "Gold", "price": 1250.00, "currency": "zar"},
     "platinum": {"name": "Platinum", "price": 1500.00, "currency": "zar"},
 }
 

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { ASSETS } from '@/data';
 import { 
-  Shield, Check, Crown, Star, Loader2, AlertCircle, ArrowLeft,
+  Crown, Check, Loader2, AlertCircle, ArrowLeft,
   CreditCard, Users, Calendar, X, CheckCircle
 } from 'lucide-react';
 import axios from 'axios';
@@ -10,20 +10,6 @@ import axios from 'axios';
 const API = process.env.REACT_APP_BACKEND_URL + '/api';
 
 const PLAN_STYLES = {
-  silver: { 
-    border: 'border-gray-400', 
-    bg: 'bg-gradient-to-b from-gray-500/10 to-gray-600/5',
-    accent: 'text-gray-300',
-    badge: 'bg-gray-500/20 text-gray-300',
-    icon: Shield
-  },
-  gold: { 
-    border: 'border-amber-500', 
-    bg: 'bg-gradient-to-b from-amber-500/10 to-amber-600/5',
-    accent: 'text-amber-400',
-    badge: 'bg-amber-500/20 text-amber-400',
-    icon: Star
-  },
   platinum: { 
     border: 'border-cyan-400', 
     bg: 'bg-gradient-to-b from-cyan-500/10 to-cyan-600/5',
@@ -41,32 +27,19 @@ const STATUS_STYLES = {
 };
 
 const PLAN_FEATURES = {
-  silver: [
-    '2x scheduled services per year',
-    'Telephonic support (Mon–Fri 8am–5pm)',
-    '48-hour response on callouts',
-    'On-site visit if not resolved telephonically',
-    '10% discount on parts',
-  ],
-  gold: [
-    '4x scheduled services per year (quarterly)',
-    'Telephonic + WhatsApp support (Mon–Sat)',
-    '24-hour response on callouts',
-    '1x emergency callout per quarter included',
-    'On-site visit if not resolved telephonically',
-    '15% discount on parts',
-    'Water filtration check included',
-  ],
   platinum: [
-    '6x scheduled services per year (bi-monthly)',
-    'Priority support 7 days (incl. public holidays)',
-    'Same-day response on callouts',
-    '2x emergency callouts per quarter included',
-    'On-site visit if not resolved telephonically',
-    '20% discount on parts',
-    'Water filtration check + replacement included',
+    '3x scheduled services per year (2 minor + 1 major)',
+    'Same-day response for repair callouts',
+    '2x callouts included for unscheduled incidents',
+    'Telephonic support Mon–Sun (08:00–15:00)',
+    'Major components/parts included (max R10,000 per component)',
+    'Components exceeding R10,000 quoted separately',
+    'Total component costs may not exceed R10,000 retainer',
+    'Pricing subject to market increases & component values',
+    'Excludes damage from proven store negligence',
     'Annual deep clean (full strip-down)',
     'Grinder burr assessment included',
+    'On-site visit if not resolved telephonically',
   ],
 };
 
@@ -78,11 +51,6 @@ function PlanCard({ plan, onSubscribe, loading, currentPlan }) {
   
   return (
     <div className={`rounded-xl border-2 ${style.border} ${style.bg} p-5 relative`} data-testid={`plan-${plan.id}`}>
-      {plan.id === 'gold' && (
-        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-amber-500 text-black text-[10px] font-bold px-3 py-0.5 rounded-full uppercase tracking-wider">
-          Popular
-        </div>
-      )}
       <div className="flex items-center gap-2 mb-3">
         <Icon size={22} className={style.accent} />
         <span className={`font-display text-lg font-bold ${style.accent}`}>{plan.name}</span>
@@ -106,11 +74,7 @@ function PlanCard({ plan, onSubscribe, loading, currentPlan }) {
         <button
           onClick={() => onSubscribe(plan.id)}
           disabled={loading}
-          className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors ${
-            plan.id === 'gold' 
-              ? 'bg-amber-500 text-black hover:bg-amber-400' 
-              : 'bg-bg-primary border border-border text-text-primary hover:border-accent-orange'
-          } disabled:opacity-50`}
+          className={`w-full py-2.5 rounded-lg font-semibold text-sm transition-colors bg-cyan-500 text-black hover:bg-cyan-400 disabled:opacity-50`}
           data-testid={`subscribe-${plan.id}`}
         >
           {loading ? <Loader2 size={16} className="animate-spin mx-auto" /> : 'Subscribe'}
@@ -123,7 +87,7 @@ function PlanCard({ plan, onSubscribe, loading, currentPlan }) {
 function AdminAssignModal({ onClose, onAssigned }) {
   const { getAuthHeader } = useAuth();
   const [store, setStore] = useState('');
-  const [planId, setPlanId] = useState('gold');
+  const [planId, setPlanId] = useState('platinum');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -178,13 +142,13 @@ function AdminAssignModal({ onClose, onAssigned }) {
           <div>
             <label className="text-xs text-text-muted uppercase tracking-wider mb-1 block">Plan</label>
             <div className="flex gap-2">
-              {['silver', 'gold', 'platinum'].map(p => (
+              {['platinum'].map(p => (
                 <button
                   key={p}
                   onClick={() => setPlanId(p)}
                   className={`flex-1 py-2 rounded-lg border text-xs font-semibold capitalize ${
                     planId === p 
-                      ? 'border-accent-orange bg-accent-orange/15 text-accent-orange' 
+                      ? 'border-cyan-400 bg-cyan-500/15 text-cyan-300' 
                       : 'border-border text-text-muted'
                   }`}
                   data-testid={`assign-plan-${p}`}
