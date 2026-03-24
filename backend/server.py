@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Query, Request, UploadFile, File
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1229,6 +1229,254 @@ async def stripe_webhook(request: Request):
     except Exception as e:
         logging.error(f"Webhook error: {str(e)}")
         return {"status": "error"}
+
+# ─── SAGE REPORT IMPORT ROUTES ──────────────────────────────
+
+import csv
+import io
+
+def parse_invoices_report(content: str):
+    """Parse Sage Customer Invoices Report (flat CSV)"""
+    reader = csv.DictReader(io.StringIO(content))
+    records = []
+    for row in reader:
+        date_val = row.get('Date', '').strip()
+        doc_no = row.get('Document No.', '').strip()
+        if not doc_no or 'Grand Total' in date_val:
+            continue
+        records.append({
+            "date": date_val,
+            "document_no": doc_no,
+            "customer_ref": row.get('Customer Ref.', '').strip(),
+            "customer": row.get('Customer', '').strip(),
+            "sales_rep": row.get('Sales Rep', '').strip(),
+            "due_date": row.get('Due Date', '').strip(),
+            "exclusive": float(row.get('Exclusive', '0').replace(',', '') or 0),
+            "vat": float(row.get('VAT', '0').replace(',', '') or 0),
+            "total_selling": float(row.get('Total Selling', '0').replace(',', '') or 0),
+            "total_outstanding": float(row.get('Total Outstanding', '0').replace(',', '') or 0),
+            "report_type": "customer_invoices"
+        })
+    return records
+
+def parse_sales_report(content: str):
+    """Parse Sage Sales By Customer Report (grouped format)"""
+    import re
+    reader = csv.reader(io.StringIO(content))
+    records = []
+    current_customer = None
+    current_invoice = None
+    current_date = None
+    line_items = []
+
+    for cols in reader:
+        if not cols or all(c.strip() == '' for c in cols):
+            continue
+        
+        first = cols[0].strip()
+        
+        # Skip headers
+        if first in ['Sales By Customer Report', 'Rock And Roller Coffee Culture', 'Name', 'Date']:
+            continue
+        if first == '' and len(cols) >= 4 and cols[1].strip() == '' and cols[3].strip() == '' and cols[4].strip() == '':
+            continue
+        
+        # Line item row: first two cols empty, description in col 2
+        if first == '' and len(cols) >= 2 and cols[1].strip() == '':
+            desc = cols[2].strip() if len(cols) > 2 else ''
+            qty_str = cols[3].strip() if len(cols) > 3 else ''
+            total_str = cols[4].strip() if len(cols) > 4 else ''
+            if desc and current_invoice:
+                try:
+                    qty = float(qty_str.replace(',', '')) if qty_str else 0
+                except ValueError:
+                    qty = 0
+                try:
+                    total = float(total_str.replace(',', '')) if total_str else 0
+                except ValueError:
+                    total = 0
+                line_items.append({
+                    "description": desc,
+                    "qty": qty,
+                    "total": total
+                })
+            continue
+        
+        # Customer header
+        if first.startswith('TECH - '):
+            current_customer = first
+            continue
+        
+        # Total line for an invoice
+        if first.startswith('Total:') and len(cols) >= 2:
+            inv = cols[1].strip()
+            if (inv.startswith('INV') or inv.startswith('CRN')) and current_customer and current_invoice:
+                try:
+                    qty_total = float(cols[3].replace(',', '')) if len(cols) > 3 and cols[3].strip() else 0
+                except ValueError:
+                    qty_total = 0
+                try:
+                    selling_total = float(cols[4].replace(',', '')) if len(cols) > 4 and cols[4].strip() else 0
+                except ValueError:
+                    selling_total = 0
+                records.append({
+                    "document_no": current_invoice,
+                    "customer": current_customer,
+                    "date": current_date,
+                    "qty_total": qty_total,
+                    "total_selling": selling_total,
+                    "line_items": line_items,
+                    "report_type": "sales_by_customer"
+                })
+                current_invoice = None
+                line_items = []
+            continue
+
+        if first.startswith('Total for Customer:') or first.startswith('Grand Total:'):
+            current_customer = None
+            continue
+
+        # Invoice header line (date, invoice no)
+        date_match = re.match(r'(\d{2}/\d{2}/\d{4})', first)
+        if date_match and len(cols) >= 2:
+            inv = cols[1].strip()
+            if inv.startswith('INV') or inv.startswith('CRN'):
+                if current_invoice and current_customer and line_items:
+                    records.append({
+                        "document_no": current_invoice,
+                        "customer": current_customer,
+                        "date": current_date,
+                        "qty_total": 0,
+                        "total_selling": 0,
+                        "line_items": line_items,
+                        "report_type": "sales_by_customer"
+                    })
+                current_date = first
+                current_invoice = inv
+                line_items = []
+
+    return records
+
+@api_router.post("/sage/import")
+async def import_sage_report(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Import a Sage CSV report (Customer Invoices or Sales By Customer)"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only admin can import reports")
+    
+    if not file.filename.endswith('.csv'):
+        raise HTTPException(status_code=400, detail="Only CSV files are supported")
+    
+    content = (await file.read()).decode('utf-8-sig')
+    
+    # Detect report type
+    if 'Sales By Customer Report' in content[:200]:
+        report_type = "sales_by_customer"
+        records = parse_sales_report(content)
+    elif 'Document No.' in content[:200] and 'Total Selling' in content[:200]:
+        report_type = "customer_invoices"
+        records = parse_invoices_report(content)
+    else:
+        raise HTTPException(status_code=400, detail="Unrecognized report format. Upload a Sage Customer Invoices or Sales By Customer CSV.")
+    
+    if not records:
+        raise HTTPException(status_code=400, detail="No records found in file")
+    
+    # Upsert records (no duplicates based on document_no)
+    now = datetime.now(timezone.utc).isoformat()
+    imported = 0
+    updated = 0
+    
+    for rec in records:
+        rec["imported_at"] = now
+        rec["imported_by"] = current_user["email"]
+        
+        existing = await db.sage_reports.find_one({
+            "document_no": rec["document_no"],
+            "report_type": rec["report_type"],
+            "customer": rec.get("customer", "")
+        })
+        
+        if existing:
+            await db.sage_reports.update_one(
+                {"_id": existing["_id"]},
+                {"$set": rec}
+            )
+            updated += 1
+        else:
+            await db.sage_reports.insert_one(rec)
+            imported += 1
+    
+    return {
+        "report_type": report_type,
+        "filename": file.filename,
+        "total_records": len(records),
+        "new_imported": imported,
+        "updated": updated
+    }
+
+@api_router.get("/sage/reports")
+async def get_sage_reports(
+    report_type: Optional[str] = Query(None, enum=["customer_invoices", "sales_by_customer"]),
+    current_user: dict = Depends(get_current_user)
+):
+    """Get imported Sage report data"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    query = {}
+    if report_type:
+        query["report_type"] = report_type
+    
+    records = await db.sage_reports.find(query, {"_id": 0}).sort("date", -1).to_list(2000)
+    
+    # Summary
+    total_selling = sum(r.get("total_selling", 0) for r in records)
+    total_outstanding = sum(r.get("total_outstanding", 0) for r in records if "total_outstanding" in r)
+    customers = list(set(r.get("customer", "") for r in records))
+    
+    return {
+        "records": records,
+        "summary": {
+            "total_records": len(records),
+            "total_selling": round(total_selling, 2),
+            "total_outstanding": round(total_outstanding, 2),
+            "unique_customers": len(customers)
+        }
+    }
+
+@api_router.get("/sage/import-history")
+async def get_import_history(
+    current_user: dict = Depends(get_current_user)
+):
+    """Get history of imports"""
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Admin only")
+    
+    pipeline = [
+        {"$group": {
+            "_id": {"imported_at": "$imported_at", "report_type": "$report_type", "imported_by": "$imported_by"},
+            "count": {"$sum": 1},
+            "total_selling": {"$sum": "$total_selling"}
+        }},
+        {"$sort": {"_id.imported_at": -1}},
+        {"$limit": 20}
+    ]
+    results = await db.sage_reports.aggregate(pipeline).to_list(20)
+    
+    history = []
+    for r in results:
+        history.append({
+            "imported_at": r["_id"]["imported_at"],
+            "report_type": r["_id"]["report_type"],
+            "imported_by": r["_id"]["imported_by"],
+            "record_count": r["count"],
+            "total_selling": round(r["total_selling"], 2)
+        })
+    
+    return history
 
 # ─── EXISTING ROUTES ────────────────────────────────────────
 

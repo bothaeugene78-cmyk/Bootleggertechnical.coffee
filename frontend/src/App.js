@@ -11,8 +11,9 @@ import Users from '@/pages/Users';
 import LoginHistory from '@/pages/LoginHistory';
 import ResetCodes from '@/pages/ResetCodes';
 import SLA from '@/pages/SLA';
+import SageImport from '@/pages/SageImport';
 import { APP_CONFIG } from '@/data';
-import { LayoutDashboard, Ticket, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound, Download, X, Shield } from 'lucide-react';
+import { LayoutDashboard, Ticket, Coffee, Lightbulb, ClipboardList, UsersIcon, Menu, LogOut, Clock, KeyRound, Download, X, Shield, FileUp } from 'lucide-react';
 
 // PWA Install Prompt
 function InstallBanner() {
@@ -190,6 +191,14 @@ function Header({ user, onLogout, onShowMenu, showMenu, onNavigate }) {
                   <KeyRound size={18} className="text-accent-orange" />
                   <span className="text-sm text-text-secondary">Password Resets</span>
                 </button>
+                <button
+                  onClick={() => { onNavigate('sageImport'); onShowMenu(); }}
+                  className="w-full px-3 py-2.5 flex items-center gap-3 hover:bg-bg-primary transition-colors text-left"
+                  data-testid="sage-import-btn"
+                >
+                  <FileUp size={18} className="text-accent-orange" />
+                  <span className="text-sm text-text-secondary">Sage Reports</span>
+                </button>
               </>
             )}
             
@@ -254,6 +263,7 @@ function AuthenticatedApp() {
       case 'dashboard': return <Dashboard onNavigate={setPage} />;
       case 'tickets': return <Tickets />;
       case 'sla': return <SLA onBack={() => setPage('dashboard')} />;
+      case 'sageImport': return <SageImport onBack={() => setPage('dashboard')} />;
       case 'equipment': return <Equipment />;
       case 'selfhelp': return <SelfHelp />;
       case 'history': return <History />;
