@@ -478,12 +478,17 @@ async def login(credentials: UserLogin):
     if not verify_password(credentials.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
-    # Update last login
+    # Update last login + auto-correct role based on email
+    correct_role = get_role_from_email(user["email"])
     now = datetime.now(timezone.utc).isoformat()
+    update_fields = {"last_login": now}
+    if user.get("role") != correct_role:
+        update_fields["role"] = correct_role
     await db.users.update_one(
         {"id": user["id"]},
-        {"$set": {"last_login": now}}
+        {"$set": update_fields}
     )
+    actual_role = correct_role
     
     # Log the login
     login_doc = {
@@ -504,7 +509,7 @@ async def login(credentials: UserLogin):
             id=user["id"],
             email=user["email"],
             name=user["name"],
-            role=user.get("role", "store_staff"),
+            role=actual_role,
             store_name=user.get("store_name"),
             created_at=user["created_at"],
             last_login=now
